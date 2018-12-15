@@ -1,3 +1,17 @@
+---
+title: "TextAnalytics.R"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+Here is initial data processing and manipulation.
+
+```{r}
 ############################################
 # Text Analytics (learning from D.Langer)
 # Mainly following playlist at : https://www.youtube.com/watch?v=4vuw0AsHeGw&list=PL8eNk_zTBST8olxIRFoo0YeXxEOkYdoxi
@@ -44,19 +58,14 @@ test <- spam.raw[-indexes,]
 # Note that class label proportions are maintained
 prop.table(table(train$Label))
 prop.table(table(test$Label))
+```
 
-#########################################
-# More data exploration and processing
-#########################################
+# Including Plots
 
-# How do we represent text as Data Frame?
+You can also embed plots, for example:
 
-# We achieve this by TOKENIZATION
+```{r}
+plot(pressure)
+```
 
-############################
-# Migrated to Rmarkdown.
-############################
-
-
-
-
+Note t
