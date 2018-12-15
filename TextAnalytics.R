@@ -4,4 +4,3 @@
 ############################################
 
 install.packages(c("quanteda","irlba"))
-# ERROR: dependency ‘RSpectra’ is not available for package ‘quanteda’
