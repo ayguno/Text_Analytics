@@ -298,7 +298,7 @@ Note that:
 
     **tuneLength = 7** performs effectively hyperparameter tuning using 7 different model fits comparing 7 different hyperparameter values for rpart tree.
     
-```{r}
+```{r,eval = False}
 end.time - start.time
 
 # Time difference of 8.363868 mins
@@ -320,6 +320,175 @@ Note the results are presented quite intuitively,**cp** is the rpart hyperparame
 
 # Using TF-IDF: changing representation of DFM
 
-Continue at:
+So far we realized that the bag-of-words model with document frequency matrices could work! 94% Accuracy is quite remarkable in simplest terms.
 
-https://www.youtube.com/watch?v=az7yf0IfWPM&index=5&list=PL8eNk_zTBST8olxIRFoo0YeXxEOkYdoxi
+There is still room for improvement:
+
+- Longer documents will tend to have higher term counts.
+- Terms that appear frequently across the corpus aren't as important (nearly zero variance).
+
+Therefore, we can improve upon the DFM representation if we can achieve the following:
+
+- Normalize documents based on their length
+- Penalize terms that occur frequently across the corpus (set of available documents)
+
+So, if we can adjust our DFM to accomodate these 2 things, it will be much more powerful.
+
+This is exactly what TF-IDF address:
+
+## TF: Term Frequency 
+
+- Let freq(t,d) be the count of the instances of the term t in document d.
+
+- Let TF(t,d) be the proportion of the count of term t in document d. e.g: if I have a term that appeared in a document 4 times and the document has a total of 10 words (after text processing pipeline), then TF of that term becomes 0.4.
+
+Mathematically:
+
+    TF(t,d) = freq(t,d) / Sum i (freq(ti,d))
+
+Therefore, TF achieves the first goal, that is the normalization to text length.
+
+## IDF: Inverse Document Frequency
+
+- Let N be the count of distinct documents in the corpus.
+- Let count(t) be the count of documents in the corpus in which the term t is present.
+
+Then,
+
+    IDF(t) = log( N / count(t) )
+    
+    # log10 is commonly used.
+    
+Notice that if a term appears in ALL of the documents, IDF of that term will be log 1 = 0, which will be a penalizing weight for that term. Hence, if the term appears in every single document, this would mean the information in that term is not useful, because it does not explain any variability. This way we achieved our second goal, that is penalizing the terms that occur frequently across the corpus.
+
+## TF-IDF idea:
+
+IF we combine TF and IDF, we can enhance the document-term frequency matrices. TF-IDF is simply multiplication of these two amounts:
+
+    TF-IDF(t,d) = TF(t,d) * IDF(t)
+    
+In most cases TF-IDF is prototypical for text processing pipelines as it can enhance the features of the DFM. Hence, along with other steps described above, TF-IDF is often incorporated in to text-processing pipeline. 
+
+Let's run the TF-IDF using our DFM:
+
+Note that we are writing our own functions for this because:
+
+1. its educational.
+2. we can cache the IDF from the training data and we can use the same weights to transform the test data set to get the consistent representation.
+
+```{r}
+# Our Function for calculating Term Frequency(TF)
+
+term.frequency <- function(row){
+    return(row / sum(row))
+}
+
+# Our function for calculating Inverse Document Frequency (IDF)
+inverse.doc.freq <- function(col){
+    corpus.size <- length(col)
+    doc.count <- length(which(col > 0))
+    
+    return(log10(corpus.size/doc.count))
+}
+
+# Our function for calculating TF-IDF
+tf.idf <- function(tf,idf){
+    return (tf * idf)
+}
+
+# First step, normalize all documents via TF
+# Matrix transformations:
+
+train.tokens.df <- apply(train.tokens.matrix,1,term.frequency)
+dim(train.tokens.df)
+
+
+```
+```{r}
+dim(train.tokens.matrix)
+```
+
+Note that the matrix got transposed as a result of the tf transformation:
+
+```{r}
+head(train.tokens.df[,1:10],20)
+```
+
+Notice that now the documents are columns and terms are rows.
+
+The second step, calculate the **IDF vector** that we will use for transforming both training and test data. This is very important, because we will train the model using these set of IDFs, then when we want to transform the test data we should be able to transform the data to exactly the same space.
+
+```{r}
+# Apply the idf function over the columns
+train.tokens.idf <- apply(train.tokens.matrix,2,inverse.doc.freq)
+str(train.tokens.idf)
+```
+
+Note that the idf is a single numeric vector of idfs as we expected.
+
+Finally, calculate the TF-IDF for our training corpus:
+```{r}
+# Note that since train.tokens.df was transposed during the normalization, we apply the tf.idf function on columns
+train.tokens.tfidf <- apply(train.tokens.df,2,tf.idf, 
+                            idf = train.tokens.idf)
+dim(train.tokens.tfidf)
+```
+
+I still maintain the transposed matrix state, but the data is now multiplied by the IDF weights for each term:
+
+```{r}
+head(train.tokens.tfidf[,1:10],20)
+```
+
+    
+After this transformations, we achieved our goals. Now the values also reflect the impact of how often a particular term is being seen in the document. As a result, if the TF-IDF value is low, that means the term is relatively frequent across the corpus and that is reflected (e.g: value of the word **go** is quite low, which is intuitive because it would be a common word. In contrast, the word **jurong** has a higher value in text1, which could imply its possibly higher predictive value relative to word **go**).
+
+Importantly, we need to **transpose this matrix back** into the original form of the matrix, where columns are features and rows are documents.
+
+```{r}
+train.tokens.tfidf <- t(train.tokens.tfidf)
+dim(train.tokens.tfidf)
+head(train.tokens.tfidf[,1:10],20)
+```
+
+
+Check for incomplete cases:
+
+```{r}
+length(which(!complete.cases(train.tokens.tfidf)))
+```
+
+Note that as a result of the pre-processing pipeline, it is possible to end up with empty strings in our matrix. Imagine that some words could be just punctuations or similar characters that were stripped, hence missing values in this matrix do occur, because any time there is an error in the calculation of TF-IDF there would be NAN errors.
+
+Fix the incomplete cases:
+
+```{r}
+incomplete.cases <- which(!complete.cases(train.tokens.tfidf))
+train$Text[incomplete.cases]
+```
+Note that we expect that all these cases will be stripped off by our pre-processing pipeline. We need to correct these documents.
+
+```{r}
+# We fill these documents with zero values, instead of removing them. This is because these messages could be legitimate messages, but our processing pipeline can not extract any features from them.
+train.tokens.tfidf[incomplete.cases,] <- rep(0,0,ncol(train.tokens.tfidf))
+dim(train.tokens.tfidf)
+sum(which(!complete.cases(train.tokens.tfidf)))
+```
+
+We have now fixed these incomplete cases, so that machine learning algorithms will not throw error.
+
+Lastly, lets combine this matrix with labels and make the column names legitimate as we have done for the DFM previously:
+
+```{r}
+train.tokens.tfidf.df <- cbind(Label = train$Label,
+                              data.frame(train.tokens.tfidf))
+
+names(train.tokens.tfidf.df) <- make.names(names(train.tokens.tfidf.df))
+
+head(train.tokens.tfidf.df[,1:10],10)
+```
+
+    
+
+
+
