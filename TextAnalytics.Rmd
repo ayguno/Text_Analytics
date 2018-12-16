@@ -1,10 +1,24 @@
 ---
-title: "TextAnalytics.R"
-output: html_document
+title: "Text Analytics with R"
+output:
+  pdf_document:
+    toc: yes
+  word_document:
+    toc: yes
+    highlight: default
+    df_print: kable
+  html_document:
+    depth: 6
+    df_print: paged
+    highlight: espresso
+    number_sections: yes
+    theme: cerulean
+    toc: yes
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(results = "markup", fig.align = "center",
+                      fig.height= 8, fig.width= 8,message=FALSE,warning=FALSE)
 ```
 
 # Introduction
