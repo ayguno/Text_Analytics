@@ -460,6 +460,7 @@ After this transformations, we achieved our goals. Now the values also reflect t
 Importantly, we need to **transpose this matrix back** into the original form of the matrix, where columns are features and rows are documents.
 
 ```{r}
+# Transpose the matrix to original shape
 train.tokens.tfidf <- t(train.tokens.tfidf)
 dim(train.tokens.tfidf)
 head(train.tokens.tfidf[,1:10],20)
@@ -502,7 +503,119 @@ names(train.tokens.tfidf.df) <- make.names(names(train.tokens.tfidf.df))
 head(train.tokens.tfidf.df[,1:10],10)
 ```
 
+## Refitting the rpart single decision tree
+
+Let's see if using TF-IDF improved the performance of the same model we fitted previously by using the raw DFM:
+
+```{r,eval=FALSE}
+library(doSNOW)
+start.time <- Sys.time()
+
+# Create a cluster to work on 7 logical cores (keep at least 1 core for the operating system)
+# type = "SOCK" Socket cluster
+# Behind the scenes it will create 7 jobs
+cl <- makeCluster(spec = 7,type = "SOCK")
+# Register the cluster: 
+registerDoSNOW(cl)
+# Once registered, caret will recognize this cluster and parallelize the job
+
+rpart.cv.2 <- caret::train(Label ~ ., data = train.tokens.tfidf.df,
+                           method = 'rpart',trControl = cv.cntrl,
+                           tuneLength = 7)
+
+# Processing (training) is done, so we stop the cluster:
+stopCluster(cl)
+
+end.time <- Sys.time()
+
+end.time - start.time
+```
+
+
+```{r}
+#saveRDS(rpart.cv.2,"rpart_cv_2.rds")
+rpart.cv.2 <- readRDS("rpart_cv_2.rds")
+rpart.cv.2
+```
+
+
+Good! So note that the accuracy is uplifted from 0.942 to 0.945, hence TF-IDF transformation helped to improve model's predictive performance.
     
+# N-grams
+
+Now we have TF-IDF transformed Document Term Matrix. Can we further improve upon this representation? N-grams can be one way:
+
+- Our representations so far have been single terms (unigrams)
+- We can have more complex N-grams, this will help to capture some signal from word ordering.
+
+Hence, we can add n-grams during the text processing pipeline.
+
+**But be careful, by adding even bigrams, we will significantly increase the size of the matrix! This will ever increase the SPARSITY and CURSE OF DIMENSIONALITY problems.**
+
+Adding bigrams to our feature matrix:
+```{r}
+# Notice we can reuse our existing token object:
+train.tokens <- tokens_ngrams(train.tokens, n = 1:2)
+train.tokens[[357]]
+```
+
+Now, we need to run the entire text processing pipeline on this new matrix:
+
+(Note that stopword removal,lowercasing and stemming has been already performed since we used the original train.tokens object.)
+
+```{r}
+# Use quantida function dfm
+train.tokens.dfm <- dfm(x = train.tokens,
+                        tolower = FALSE)
+
+# Convert to standard matrix:
+train.tokens.matrix <- as.matrix(train.tokens.dfm)
+
+# Apply the idf function over the columns (need to cache this for test set)
+train.tokens.idf <- apply(train.tokens.matrix,2,inverse.doc.freq)
+
+# Need to increase memory limit otherwise won't fit into memory
+memory.limit(size=56000)
+
+# Note that since train.tokens.df was transposed during the normalization, we apply the tf.idf function on columns
+train.tokens.tfidf <- apply(train.tokens.df,2,tf.idf, 
+                            idf = train.tokens.idf)
+
+# Transpose the matrix to original shape
+train.tokens.tfidf <- t(train.tokens.tfidf)
+
+
+# Fix incomplete cases
+incomplete.cases <- which(!complete.cases(train.tokens.tfidf))
+train.tokens.tfidf[incomplete.cases,] <- rep(0,0,ncol(train.tokens.tfidf))
+
+
+# Combine with label and make legitimate names
+train.tokens.tfidf.df <- cbind(Label = train$Label,
+                              data.frame(train.tokens.tfidf))
+
+names(train.tokens.tfidf.df) <- make.names(names(train.tokens.tfidf.df))
+
+```
+
+Note the nice feature of quantida DFMs, you can type the name of the object and get information:
+
+```{r}
+train.tokens.dfm
+```
+
+Note how the dimensions are significantly expanded just by adding bigrams, and the 99.9% of the matrix is sparse!
+
+
+Important: we should clean up unsued memory:
+
+```{r}
+gc()
+```
+
+This function is sometimes useful to call to clean up unused memory. However, in text analytics we can easily reach the memory boundaries and it may or may not help.
+
+
 
 
 
