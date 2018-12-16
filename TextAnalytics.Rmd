@@ -17,7 +17,7 @@ Here is initial data processing and manipulation.
 # Mainly following playlist at : https://www.youtube.com/watch?v=4vuw0AsHeGw&list=PL8eNk_zTBST8olxIRFoo0YeXxEOkYdoxi
 ############################################
 
-install.packages(c("quanteda","irlba"))
+#install.packages(c("quanteda","irlba"))
 
 spam.raw <- read.csv(file = 'spam.csv' , stringsAsFactors =  FALSE)
 spam.raw <- spam.raw[,1:2]
@@ -60,12 +60,126 @@ prop.table(table(train$Label))
 prop.table(table(test$Label))
 ```
 
-# Including Plots
+# More data exploration and processing
 
-You can also embed plots, for example:
+How do we represent text as Data Frame? We achieve this by **TOKENIZATION**.
 
+Once Tokenization is completed we can create a **Document-Frequency Matrix** (DFM).
+
+- Each row represents a distinct **document**.
+- Each column represents a distinct **token**.(Distinct Tokens across all documents are also called **Terms**)
+- Each cell(matrix entry) contains the **counts** of that token for a given document.
+
+- one-grams produce **bag-of-words model**, this is where we point we start, it is possible to preserve word order by adding n-grams to make our models even stronger or accurate.
+
+## Some considerations
+
+- Do we want all tokens to be terms in our DFM?
+    - How about case-sensitivity/capitalization
+    - Punctuation? Do I want them in my DFM? Typically you don't.
+    - Do you want numbers/digits in your DFM?
+    - Do you want evey word? No: don't use stop words (e.g: the,and..)
+    - Symbols (sometimes very important)
+    - What about similar words? **STEMMING** Is it possible to COLLAPSE similar word to a common stem (single representation).
+
+
+# Data Pipelines
+
+Notice we will have some dirty text, such as **&amp** here. Our pipelines should take these into consideration, possibly adding domain knowledge into it. Replacing, stripping/removing these are all important decisions.
+    
 ```{r}
-plot(pressure)
+train$Text[21]
 ```
 
-Note t
+```{r}
+train$Text[38]
+```
+
+**It is reccomended to streamline the steps below as a Pipeline:**
+
+### Tokenization
+
+```{r}
+# Quite powerful package
+library(quanteda)
+
+# Tokenize
+train.tokens <- tokens(train$Text,what = "word",
+                       remove_numbers = TRUE, 
+                       remove_punct = TRUE,
+                       remove_symbols = TRUE, 
+                       remove_hyphens = TRUE)
+
+# Returns a list-like object that contains tokens
+train.tokens[[357]]
+
+```
+
+Notice that based on our preferences the tokenization is performed.
+
+If we want 3-grams, simply use ngrams argument:
+
+(Note that the default concetanator is "_")
+
+```{r}
+tokens(train$Text,what = "word",
+                       remove_numbers = TRUE, 
+                       remove_punct = TRUE,
+                       remove_symbols = TRUE, 
+                       remove_hyphens = TRUE,
+       ngrams = 3)[[357]]
+```
+
+### Transform Tokens
+
+Let's convert the tokens to lowercase (for our use-case)
+
+```{r}
+train.tokens <- tokens_tolower(train.tokens)
+train.tokens[[357]]
+```
+
+### Removing stopwords
+
+This is a tricky step for any text analytics pipeline. We need to understand what is in the stop words library of each package we might be using. Depending on our domain, the list might contain words that we may actually want to maintain in our DFM.
+
+These are the stopwords removed by the quanteda package:
+
+```{r}
+quanteda::stopwords()
+```
+
+```{r}
+# Remove stopwords
+train.tokens <- tokens_select(x = train.tokens,
+                              pattern = stopwords(),
+                              selection = "remove")
+train.tokens[[357]]
+```
+
+### Stemming tokens
+
+```{r}
+train.tokens <- tokens_wordstem(train.tokens, 
+                                language = "english")
+train.tokens[[357]]
+```
+
+What we have gone through is almost a typical text preprocessing pipeline:
+
+1. Tokenize (specify what to remove; numbers, symbols, hyphens...)
+2. Lovercase
+3. Remove stopwords (or custom common words?)
+4. Stemming
+
+# Create Document Frequency Matrix
+
+In our case this is a bag-of-words model since we used one-grams;
+
+```{r}
+# Use quantida function dfm
+train.tokens.dfm <- dfm(x = train.tokens,
+                        tolower = FALSE)
+```
+
+
