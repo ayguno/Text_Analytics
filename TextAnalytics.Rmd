@@ -318,3 +318,8 @@ Note the results are presented quite intuitively,**cp** is the rpart hyperparame
 - extract features using SVD, to reduce the dimensionality
 - and finally trying more powerful algorithms like randomForest
 
+# Using TF-IDF: changing representation of DFM
+
+Continue at:
+
+https://www.youtube.com/watch?v=az7yf0IfWPM&index=5&list=PL8eNk_zTBST8olxIRFoo0YeXxEOkYdoxi
