@@ -1,18 +1,18 @@
 ---
 title: "Text Analytics with R"
 output:
-  pdf_document:
+  html_document:
+    depth: 6
+    df_print: paged
+    highlight: tango
+    number_sections: yes
+    theme: cerulean
     toc: yes
   word_document:
     toc: yes
     highlight: default
     df_print: kable
-  html_document:
-    depth: 6
-    df_print: paged
-    highlight: espresso
-    number_sections: yes
-    theme: cerulean
+  pdf_document:
     toc: yes
 ---
 
@@ -312,7 +312,7 @@ Note that:
 
     **tuneLength = 7** performs effectively hyperparameter tuning using 7 different model fits comparing 7 different hyperparameter values for rpart tree.
     
-```{r,eval = False}
+```{r,eval = FALSE}
 end.time - start.time
 
 # Time difference of 8.363868 mins
@@ -616,6 +616,117 @@ gc()
 This function is sometimes useful to call to clean up unused memory. However, in text analytics we can easily reach the memory boundaries and it may or may not help.
 
 
+# LSA: Latent Semantic Analysis using SVD
+
+We will perform feature extraction!
+
+Two purposes:
+
+1. We want to make our columns more feature rich than the current highly sparse state. We want to shrink the dimension, yet maintaining the variance.
+2. By reducing the size of the data, we want to be able to use more powerful (but also more complex and computationally costly) algorithms for our problem (otherwise we will be running big scalability problems).
+
+## Vector space model
+
+**Vector space model** helps to address our current problems related to curse of dimensionality and scaleability.
+
+- Core intuition: we represent documents as **vectors of numbers**.
+- Our representation allows us to work with document geometrically.
+
+The idea is explained well here (statring from 12:12):
+
+```{r}
+library(vembedr)
+vembedr::embed_url("https://www.youtube.com/watch?v=Fza5szojsU8&index=7&list=PL8eNk_zTBST8olxIRFoo0YeXxEOkYdoxi")
+```
+
+
+### Dot product of documents
+
+When we start thinking documents as mathematical vectors, we can intuitively start seeing some documents are more alike. 
+
+We can even use trigonometrical distances to understand document relationships!
+
+Dot product of vectors A and B (vectors have to be in the same length):
+
+A.B = Sum (Ai * Bi)
+
+Dot product of two document vectors can be used as a proxy for correlation. Hence, conceptually dot products will be useful.
+
+We can leverage matrix multiplication to calculate all dot products of all vectors all in once:
+
+    X: document term matrix
+
+    Dot product of all Docs = X * X Transpose
+    
+    
+**Intuition:** the dot product of the documents is indicative of document correlation given the set of matrix terms.
+
+### Dot product of the terms
+
+We can also take the perspective of taking the dot products of the terms in the document-term frequency matrix!
+    
+    X: document term matrix
+    
+    Dot Product of All Terms = X Transpose * X
+
+In this case we are getting a proxy for correlation between the terms!
+
+**Intuition:** the dot product of the terms is indicative of term correlation given the set of matrix documents.
+
+## Latent Semantic Analysis
+
+**Intuition:** Extract relationships between the documents and terms assuming that terms that are close in meaning will appear in similar (i.e: correlated) pieces of text.
+
+**Implementation**: LSA leverages a singular value decomposition (SVD) factorization of a term-document matrix to extract these relationships.
+
+SVD: is a way of decomposing a matrix into smaller, more compressed forms.
+
+    X: term-document matrix (transposed version of document-term matrix)
+
+    SVD of X = X = U * Sigma * V Transpose
+
+where:
+
+    U: matrix contains the eigenvectors of the term correlations, X * X Transpose
+    V: matrix contains the eigenvectors of the document correlations, X Transpose * X
+    Sigma: contains the singular values of the factorization
+    
+this could be simplified as:
+
+    U: contains the correlations between terms, AT higher levels of abstraction
+    V: contains the correlations between documents, AT higher levels of abstraction
+    
+Here, the abstraction helps to compress the signal from various columns in the original matrix into a single column.
+    
+LSA often remediates the curse of dimensionality problem in text analytics:
+
+- The matrix factorization has the effect of combining columns, potentially enriching signal in the data.
+
+- By selecting a fraction of the most important singular values, LSA can dramatically reduce dimensionality.
+
+However, there is not free lunch:
+
+- Performing the SVD factorization is computationally intensive.
+- The reduced factorized matrices (i.e: the "semantic spaces") are approximations. So, they won't be 'exact', there will be some information loss.But hopefully the overall gain of predictive power will be higher than some information loss by compressing the data.
+- We will need to project new data into the semantic space.
+
+SVD is effective and is almost a staple of text analytics pipelines.
+
+## Projecting New Data
+
+- As with TF-IDF, the use of SVD will require that new data be transformed/projected before predictions can be made.
+
+- Once the basic processing (tokenization, removal of stop words, stemming...),the following represents the high-level process for projection:
+
+    - Normalize the document vector (i.e:rows) using the term.frequency() function
+    - Complete the TF-IDF projection by using the tf.idf() function
+    - Apply the SVD projection on the document vector
+    
+
+
+
+
+    
 
 
 
