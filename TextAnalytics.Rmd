@@ -723,8 +723,43 @@ SVD is effective and is almost a staple of text analytics pipelines.
     - Apply the SVD projection on the document vector
     
 
+# Cosine Similarity
+
+We can engineer yet another feature to assess the similarity between the documents in the large vector space.A better proxy than the dot product.
+
+Measure the **angle** between the document vectors, and take their **cosine**.Then, comparing cosines of the angles between different documents will give us a better idea on which documents are more likely to be similar to each other than other documents.  
+
+- Why exactly using the cosine between document vectors is an improvement over the dot product? 
+
+Some advantages of using cosine for document similarity:
+
+1. Given our representations, the cosine will be between [0,1]
+2. Metric works well in high dimensional spaces (of course, you better to SVD to shrink the dimensions, before measuring the cosine of the angles).
 
 
+The idea is explained well here (statring from 9:22):
+
+```{r}
+library(vembedr)
+vembedr::embed_url("https://www.youtube.com/watch?v=7cwBhWYHgsA&list=PL8eNk_zTBST8olxIRFoo0YeXxEOkYdoxi&index=10")
+```
+
+Note that how pythagorian theorem scales to work well on higher dimensions as well.
+
+Note: **Do not interpret cos values as percentages!! eg: if cosine is 0.73, we do NOT say these two documents are 73% similar! This is not to interpret it!!**
+
+How to interpret cos similarity:
+
+e.g:
+
+1. cos between doc1 and doc2: 0.73
+2. cos between doc1 and doc3: 0.95
+
+We interpret that **doc1 and doc3** are more similar to each other than **doc1 and doc2.** We can also say that the second similarity is about 20% higher than the first similarity. 
+
+- dlsa library in R can effectively calculate cos similarity matrix for a given DFM or SVD transformed version of it.
+
+New feature engineering idea: One way to use cosine similarity in a classification problem is to use **average similarity** between that particular data point and all other data points of the same class.If you calculate this for all data points in the training data, this will become a new feature and sometimes it is a powerfull feature.
 
     
 
