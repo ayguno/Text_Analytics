@@ -917,9 +917,9 @@ summary(test.tokens.tfidf[1,])
 We use the TF-IDF projected data to project it into the training LSA semantic space using the cached vector and matrices we produced from the SVD decompusition of the training data:
 
 ```{r}
-# test.svd.raw <- t(sigma.inverse * g.transpose %*% t(test.tokens.tfidf))
+test.svd.raw <- t(sigma.inverse * u.transpose %*% t(test.tokens.tfidf))
 
-# This should give back 300 columns (due to the selected semantic space training data resides in)
-
+# Note that this should give back 300 columns (due to the selected semantic space training data resides in)
+dim(test.svd.raw)
 ```
 
