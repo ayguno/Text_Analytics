@@ -721,7 +721,57 @@ SVD is effective and is almost a staple of text analytics pipelines.
     - Normalize the document vector (i.e:rows) using the term.frequency() function
     - Complete the TF-IDF projection by using the tf.idf() function
     - Apply the SVD projection on the document vector
+
+Mathematically, the SVD projection for document d is:
+
+    - d_hat = sigma.inverse * U.transpose %*% d
     
+```{r,eval= FALSE}
+# We use this package to perform SVD matrix factorization, because this performs TRUNCATED SVD (X number of most significant features), hence it will allow the algorithm run faster and enables to scale
+
+library(irlba)
+start.time <- Sys.time()
+
+# Note that LSA assumes TDM, so we have to transpose our DTM
+
+# Perform SVD specifically, reduce the dimensionality down to 300 columns
+train.irlba <- irlba(t(train.tokens.tfidf), nv = 300, maxit= 600)
+
+Sys.time() - start.time
+# Time difference of 6.302957 mins
+```
+```{r}
+#saveRDS(train.irlba,"train_irlba.rds")
+train.irlba <- readRDS("train_irlba.rds")
+```
+
+## Cached SVD elements from training data
+
+As with TF-IDF we will need to project the new data during production into the SVD
+semantic space. We will use the mathematical representation we discussed above to achieve this. We will also need to cache the train.irlba object (as we saved as rds file) since it contains the SVD factorized matrices of the training data set and it tehrefore contains the mathematical elements to project data into the new latent semantic space:
+
+    - d_hat = sigma.inverse * U.transpose %*% d
+
+```{r}
+sigma.inverse <- 1 / train.irlba$d
+u.transpose <- t(train.irlba$u)
+
+# For example, let's say we have a new document (a new TF-IDFed data point) and we want to project it into the same LSA space:
+document <- train.tokens.tfidf[1,]
+
+# document_hat becomes the transformed version of this new data point
+document_hat <- sigma.inverse * u.transpose %*% document 
+
+```
+
+Notice that document_hat now has 300 columns:
+
+```{r}
+str(document)
+str(document_hat)
+```
+
+This way we achieve to shrink and project any new data point with the same exact tokens into the same latent semantic space.    
 
 # Cosine Similarity
 
@@ -759,9 +809,117 @@ We interpret that **doc1 and doc3** are more similar to each other than **doc1 a
 
 - dlsa library in R can effectively calculate cos similarity matrix for a given DFM or SVD transformed version of it.
 
-New feature engineering idea: One way to use cosine similarity in a classification problem is to use **average similarity** between that particular data point and all other data points of the same class.If you calculate this for all data points in the training data, this will become a new feature and sometimes it is a powerfull feature.
+New feature engineering idea: One way to use cosine similarity in a classification problem is to use **average similarity** between that particular data point and all other data points of the same class.If you calculate this for all data points in the training data, this will become a new feature and sometimes it is a powerfull feature (e.g: spam similarity)
 
     
+# Your First Test
 
+In order to test the performance of the models we generated, we need to pre-process the test data set in the same way we performed for the training set. This is essential for the utility of models during production, since as the new data flows it becomes necessary to convert the new data into the new format and process exactly in the same way model can understand:
 
+Recall what we have performed with training data, we need to perform the same steps with the test data:
+
+1. Tokenization
+2. Lower casing
+3. Stopword removal
+4. Stemming
+5. Adding bigrams
+6. Transform to dfm
+7. **Ensure test dfm has the same features as train dfm**
+
+```{r}
+# 1.Tokenization
+test.tokens <- tokens(test$Text, what = "word",
+                      remove_numbers = TRUE, remove_punct = TRUE,
+                      remove_symbols = TRUE, remove_hyphens = TRUE)
+
+# 2.Lowercase the tokens
+test.tokens <- tokens_tolower(test.tokens)
+
+# 3.Stopword removal
+test.tokens <- tokens_select(test.tokens, stopwords(),
+                             selection = "remove")
+
+# 4. Stemming
+test.tokens <- tokens_wordstem(test.tokens, language = "english")
+
+# 5. Add bi-grams
+test.tokens <- tokens_ngrams(test.tokens, n = 1:2)
+
+# 6. Convert n-grams to quanteda document-term frequency matrix
+test.tokens.dfm <- dfm(test.tokens,tolower = FALSE)
+```
+
+Now compare dimensions of training and test DFMs:
+
+```{r}
+train.tokens.dfm
+test.tokens.dfm
+```
+
+Note that test data set will extract different features, this is totally normal and is a common theme in text analytics. However, our model will only understand the same 29,154 features that it was trained to work for. Therefore, we need to ensure the processed test data set is structured in the same way.
+
+Watch the relevant discussion here (more interesting from 6:48):
+
+```{r}
+library(vembedr)
+vembedr::embed_url("https://www.youtube.com/watch?v=XWUi7RivDJY&index=11&list=PL8eNk_zTBST8olxIRFoo0YeXxEOkYdoxi")
+```
+
+Now, we need to make sure test DFM looks exactly the same as training interms of columns (features):
+
+```{r}
+# 7. **Ensure test dfm has the same features as train dfm**
+test.tokens.dfm <- dfm_select(test.tokens.dfm,train.tokens.dfm)
+test.tokens.dfm
+```
+
+Note that using the train.tokens.dfm as the second argument (pattern), we impose the occurance of the same tokens in the test data set.
+
+Next step in our pipeline is to TF-IDF new data using the values we cached previously:
+
+```{r}
+# TF
+test.tokens.matrix <- as.matrix(test.tokens.dfm)
+## Normalize all documents using TF
+test.tokens.df <- apply(test.tokens.matrix,1,term.frequency)
+str(test.tokens.df)
+```
+Recall that now documents are on columns and terms are in rows (i.e: TDM)
+
+```{r}
+## IDF
+# Note we are using the idf vector generated by the training set to project the test data into the same space:
+test.tokens.tfidf <- apply(test.tokens.df,2,tf.idf,idf = train.tokens.idf)
+dim(test.tokens.tfidf)
+```
+
+Note that it is still TDM.
+
+Final steps:
+
+1. Transpose back to DFM
+2. Fix incomplete cases
+
+```{r}
+# Transpose the matrix back to DFM
+test.tokens.tfidf <- t(test.tokens.tfidf)
+dim(test.tokens.tfidf)
+```
+```{r}
+# Fix incomplete cases
+summary(test.tokens.tfidf[1,])
+test.tokens.tfidf[is.na(test.tokens.tfidf)] <- 0.0
+summary(test.tokens.tfidf[1,])
+```
+
+3. SVD projection:
+
+We use the TF-IDF projected data to project it into the training LSA semantic space using the cached vector and matrices we produced from the SVD decompusition of the training data:
+
+```{r}
+# test.svd.raw <- t(sigma.inverse * g.transpose %*% t(test.tokens.tfidf))
+
+# This should give back 300 columns (due to the selected semantic space training data resides in)
+
+```
 
